@@ -1115,11 +1115,11 @@ class LMinCache(NetworkedCache):
 	return self.cache._state.keys()+list(self.permanent_set)
 
 def main():
-   #logging.basicConfig(filename='execution.log', filemode='w', level=logging.INFO) 
+   #logging.basicConfig(filename='execution.log', filemode='w', level=logging.INFO)
 
    parser = argparse.ArgumentParser(description = 'Simulate a Network of Caches',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
    #parser.add_argument('inputfile',help = 'Training data. This should be a tab separated file of the form: index _tab_ features _tab_ output , where index is a number, features is a json string storing the features, and output is a json string storing output (binary) variables. See data/LR-example.txt for an example.')
-   parser.add_argument('outputfile',help = 'Output file')
+   parser.add_argument('outputfile', help='Output file')
    parser.add_argument('--max_capacity',default=2,type=int, help='Maximum capacity per cache')
    parser.add_argument('--min_capacity',default=2,type=int, help='Minimum capacity per cache')
    parser.add_argument('--max_weight',default=100.0,type=float, help='Maximum edge weight')
@@ -1132,10 +1132,10 @@ def main():
 #   parser.add_argument('--sources_per_item',default=1,type=int, help='Number of designated sources per catalog item')
    parser.add_argument('--demand_size',default=1000,type=int, help='Demand size')
    parser.add_argument('--demand_change_rate',default=0.0,type=float, help='Demand change rate')
-   parser.add_argument('--demand_distribution',default="powerlaw",type=str, help='Demand distribution',choices=['powerlaw','uniform'])
+   parser.add_argument('--demand_distribution',default='powerlaw',type=str, help='Demand distribution', choices=['powerlaw','uniform'])
    parser.add_argument('--powerlaw_exp',default=1.2,type=float, help='Power law exponent, used in demand distribution')
    parser.add_argument('--query_nodes',default=100,type=int, help='Number of nodes generating queries')
-   parser.add_argument('--graph_type',default="erdos_renyi",type=str, help='Graph type',choices=['erdos_renyi','balanced_tree','hypercube',"cicular_ladder","cycle","grid_2d",'lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
+   parser.add_argument('--graph_type',default='erdos_renyi',type=str, help='Graph type', choices=['erdos_renyi','balanced_tree','hypercube','cicular_ladder','cycle','grid_2d','lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
    parser.add_argument('--graph_size',default=100, type=int, help='Network size')
    parser.add_argument('--graph_degree',default=4, type=int, help='Degree. Used by balanced_tree, regular, barabasi_albert, watts_strogatz')
    parser.add_argument('--graph_p',default=0.10, type=int, help='Probability, used in erdos_renyi, watts_strogatz')
@@ -1152,96 +1152,94 @@ def main():
    parser.add_argument('--expon',default=0.5,type=float,help='exponent used in LMIN')
    parser.add_argument('--T',default=5.,type=float,help='Suffling period used in LMIN')
    args = parser.parse_args()
-   	
-   args.debug_level= eval("logging."+args.debug_level)
+   args.debug_level = eval("logging."+args.debug_level)
 
    def graphGenerator():
-	if args.graph_type == "erdos_renyi":
-	    return networkx.erdos_renyi_graph(args.graph_size,args.graph_p)
-	if args.graph_type == "balanced_tree":
-	    ndim = int(np.ceil(np.log(args.graph_size)/np.log(args.graph_degree)))
-	    return networkx.balanced_tree(args.graph_degree,ndim)
-	if args.graph_type == "cicular_ladder":
-	    ndim = int(np.ceil(args.graph_size*0.5))
-	    return  networkx.circular_ladder_graph(ndim)
-	if args.graph_type == "cycle":
-	    return  networkx.cycle_graph(args.graph_size)
-	if args.graph_type == 'grid_2d':
-	    ndim = int(np.ceil(np.sqrt(args.graph_size)))
+        if args.graph_type == 'erdos_renyi':
+            return networkx.erdos_renyi_graph(args.graph_size,args.graph_p)
+        if args.graph_type == 'balanced_tree':
+            ndim = int(np.ceil(np.log(args.graph_size)/np.log(args.graph_degree)))
+            return networkx.balanced_tree(args.graph_degree,ndim)
+        if args.graph_type == 'cicular_ladder':
+            ndim = int(np.ceil(args.graph_size*0.5))
+            return networkx.circular_ladder_graph(ndim)
+        if args.graph_type == 'cycle':
+            return networkx.cycle_graph(args.graph_size)
+        if args.graph_type == 'grid_2d':
+            ndim = int(np.ceil(np.sqrt(args.graph_size)))
             return networkx.grid_2d_graph(ndim,ndim)
-	if args.graph_type == 'lollipop':
-	    ndim = int(np.ceil(args.graph_size*0.5))
-	    return networkx.lollipop_graph(ndim,ndim)
-	if args.graph_type =='expander':
-	    ndim = int(np.ceil(np.sqrt(args.graph_size)))
-	    return networkx.margulis_gabber_galil_graph(ndim)
-	if args.graph_type =="hypercube":
-	    ndim = int(np.ceil(np.log(args.graph_size)/np.log(2.0)))
-	    return networkx.hypercube_graph(ndim)
-	if args.graph_type =="star":
-	    ndim = args.graph_size-1
-	    return networkx.star_graph(ndim)
-	if args.graph_type =='barabasi_albert':
-	    return networkx.barabasi_albert_graph(args.graph_size,args.graph_degree)
-	if args.graph_type =='watts_strogatz':
-	    return networkx.connected_watts_strogatz_graph(args.graph_size,args.graph_degree,args.graph_p)
-	if args.graph_type =='regular':
-	    return networkx.random_regular_graph(args.graph_degree,args.graph_size)
-	if args.graph_type =='powerlaw_tree':
-	    return networkx.random_powerlaw_tree(args.graph_size)
-	if args.graph_type =='small_world':
-	    ndim = int(np.ceil(np.sqrt(args.graph_size)))
-	    return networkx.navigable_small_world_graph(ndim)
-	if args.graph_type =='geant':
-	    return topologies.GEANT()
-	if args.graph_type =='dtelekom':
-	    return topologies.Dtelekom()
-	if args.graph_type =='abilene':
-	    return topologies.Abilene()
-	if args.graph_type =='servicenetwork':
-	    return topologies.ServiceNetwork()
+        if args.graph_type == 'lollipop':
+            ndim = int(np.ceil(args.graph_size*0.5))
+            return networkx.lollipop_graph(ndim,ndim)
+        if args.graph_type == 'expander':
+            ndim = int(np.ceil(np.sqrt(args.graph_size)))
+            return networkx.margulis_gabber_galil_graph(ndim)
+        if args.graph_type == 'hypercube':
+            ndim = int(np.ceil(np.log(args.graph_size)/np.log(2.0)))
+            return networkx.hypercube_graph(ndim)
+        if args.graph_type == 'star':
+            ndim = args.graph_size-1
+            return networkx.star_graph(ndim)
+        if args.graph_type == 'barabasi_albert':
+            return networkx.barabasi_albert_graph(args.graph_size,args.graph_degree)
+        if args.graph_type == 'watts_strogatz':
+            return networkx.connected_watts_strogatz_graph(args.graph_size,args.graph_degree,args.graph_p)
+        if args.graph_type == 'regular':
+            return networkx.random_regular_graph(args.graph_degree,args.graph_size)
+        if args.graph_type == 'powerlaw_tree':
+            return networkx.random_powerlaw_tree(args.graph_size)
+        if args.graph_type == 'small_world':
+            ndim = int(np.ceil(np.sqrt(args.graph_size)))
+            return networkx.navigable_small_world_graph(ndim)
+        if args.graph_type == 'geant':
+            return topologies.GEANT()
+        if args.graph_type == 'dtelekom':
+            return topologies.Dtelekom()
+        if args.graph_type == 'abilene':
+            return topologies.Abilene()
+        if args.graph_type == 'servicenetwork':
+            return topologies.ServiceNetwork()
 
    def cacheGenerator(capacity,_id):
-   	if args.cache_type == 'LRU':
-            return  PriorityNetworkCache(capacity,_id,'LRU')	    		
-   	if args.cache_type == 'LFU':
-            return  PriorityNetworkCache(capacity,_id,'LFU')	    		
-   	if args.cache_type == 'FIFO':
-            return  PriorityNetworkCache(capacity,_id,'FIFO')	    		
-   	if args.cache_type == 'RR':
-            return  PriorityNetworkCache(capacity,_id,'RR')	    		
-	if args.cache_type == 'EWMAGRAD': 
-	    return EWMAGradCache(capacity,_id,beta=args.beta)
-	if args.cache_type == 'LMIN': 
-	    return LMinCache(capacity,_id,gamma=args.beta,T = args.T, expon = args.expon,interpolate = args.interpolate)
-
+        if args.cache_type == 'LRU':
+            return  PriorityNetworkCache(capacity,_id,'LRU')
+        if args.cache_type == 'LFU':
+            return  PriorityNetworkCache(capacity,_id,'LFU')
+        if args.cache_type == 'FIFO':
+            return  PriorityNetworkCache(capacity,_id,'FIFO')
+        if args.cache_type == 'RR':
+            return  PriorityNetworkCache(capacity,_id,'RR')
+        if args.cache_type == 'EWMAGRAD':
+            return EWMAGradCache(capacity,_id,beta=args.beta)
+        if args.cache_type == 'LMIN':
+            return LMinCache(capacity,_id,gamma=args.beta,T = args.T, expon = args.expon,interpolate = args.interpolate)
 
    logging.basicConfig(level=args.debug_level) 
    random.seed(args.random_seed)
-   np.random.seed(args.random_seed+2015 )
-  
+   np.random.seed(args.random_seed+2015)
+
    CONFIG.QUERY_MESSAGE_LENGTH=args.query_message_length   
    CONFIG.RESPONSE_MESSAGE_LENGTH=args.response_message_length   
-  
-   construct_stats ={}
-   
+
+   construct_stats = {}
+
    logging.info('Generating graph and weights...')
    temp_graph = graphGenerator()
    #networkx.draw(temp_graph)
-   #plt.draw()	
+   #plt.draw()
    logging.debug('nodes: '+str(temp_graph.nodes()))
    logging.debug('edges: '+str(temp_graph.edges()))
    G = DiGraph()
- 
+
    number_map = dict( zip(temp_graph.nodes(),range(len(temp_graph.nodes())) ))
    G.add_nodes_from(number_map.values()) 
    weights = {}
    for (x,y) in temp_graph.edges():
         xx = number_map[x]
-	yy = number_map[y]
-   	G.add_edges_from( ((xx,yy),(yy,xx)) ) 
-	weights[(xx,yy)] = random.uniform(args.min_weight,args.max_weight)
-	weights[(yy,xx)] = weights[(xx,yy)]
+        yy = number_map[y]
+        G.add_edges_from( ((xx,yy),(yy,xx)) ) 
+        weights[(xx,yy)] = random.uniform(args.min_weight,args.max_weight)
+        weights[(yy,xx)] = weights[(xx,yy)]
    graph_size = G.number_of_nodes()
    edge_size = G.number_of_edges()
    logging.info('...done. Created graph with %d nodes and %d edges' % (graph_size,edge_size))
@@ -1251,37 +1249,36 @@ def main():
 
    logging.info('Generating item sources...')
    item_sources = dict( (item,[G.nodes()[source]]) for item,source in zip(range(args.catalog_size),np.random.choice(range(graph_size),args.catalog_size)) )
-   logging.info('...done. Generated %d sources'%len(item_sources))
+   logging.info('...done. Generated %d sources' % len(item_sources))
    logging.debug('Generated sources:')
    for item in item_sources:
-	logging.debug(pp([item,':',item_sources[item]]))	
+        logging.debug(pp([item,':',item_sources[item]]))	
 
    construct_stats['sources'] = len(item_sources)
 
    logging.info('Generating query node list...')
-   query_node_list = [ G.nodes()[i] for i  in random.sample(xrange(graph_size),args.query_nodes)]
-   logging.info('...done. Generated %d query nodes.'%len(query_node_list) )
+   query_node_list = [ G.nodes()[i] for i in random.sample(xrange(graph_size),args.query_nodes) ]
+   logging.info('...done. Generated %d query nodes.' % len(query_node_list) )
 
    construct_stats['query_nodes'] = len(query_node_list)
-	
+
    logging.info('Generating demands...')
    if args.demand_distribution == 'powerlaw':
-	factor = lambda i : (1.0+i)**(-args.powerlaw_exp) 
+        factor = lambda i : (1.0+i)**(-args.powerlaw_exp) 
    else:
-	factor = lambda i : 1.0
+        factor = lambda i : 1.0
    pmf =  np.array( [ factor(i) for i in range(args.catalog_size) ] ) 
    pmf /= sum(pmf)
    distr = rv_discrete(values=(range(args.catalog_size),pmf))
    if args.catalog_size < args.demand_size: 
-   	items_requested = list(distr.rvs(size = (args.demand_size-args.catalog_size))) +range(args.catalog_size)
+        items_requested = list(distr.rvs(size = (args.demand_size-args.catalog_size))) +range(args.catalog_size)
    else:
-	items_requested =  list(distr.rvs(size = args.demand_size))
-   
+        items_requested =  list(distr.rvs(size = args.demand_size))
    random.shuffle(items_requested)
-	
-   demands_per_query_node= args.demand_size // args.query_nodes
+
+   demands_per_query_node = args.demand_size // args.query_nodes
    remainder = args.demand_size % args.query_nodes
-   demands =[]
+   demands = []
    for x in query_node_list:
       dem = demands_per_query_node
       if x < remainder:
@@ -1302,18 +1299,17 @@ def main():
    logging.info('...done. Generated %d caches' % len(capacities))
    logging.debug('Generated capacities:')
    for key in capacities:
-   	logging.debug(pp([key,':',capacities[key]]))
+        logging.debug(pp([key,':',capacities[key]]))
 
- 
    logging.info('Building CacheNetwork')
    cnx= CacheNetwork(G,cacheGenerator,demands,item_sources,capacities,weights,weights,args.warmup,args.monitoring_rate,args.demand_change_rate,args.min_rate, args.max_rate)
    logging.info('...done')
 
    Y,res= cnx.minimizeRelaxation()
-   
+
    logging.info('Optimal Relaxation is: '+str(cnx.relaxation(Y)))
    logging.info('Expected caching gain at relaxation point is: '+str(cnx.expected_caching_gain(Y)))
- 
+
    optimal_stats= {}
    optimal_stats['res']= res
    optimal_stats['Y'] = Y
@@ -1328,7 +1324,7 @@ def main():
 
    demand_stats = {}
    node_stats = {}
-   network_stats ={}
+   network_stats = {}
 
    for d in cnx.demands:
 	demand_stats[str(d)] = cnx.demands[d]['stats']
@@ -1342,10 +1338,10 @@ def main():
    network_stats['fun'] = cnx.funstats
    network_stats['opt'] = cnx.optstats
 
-   out = args.outputfile+"%s_%s_%ditems_%dnodes_%dquerynodes_%ddemands_%ftime_%fchange_%fgamma_%fexpon%fbeta" % (args.graph_type,args.cache_type,args.catalog_size,args.graph_size,args.query_nodes,args.demand_size,args.time,args.demand_change_rate,args.gamma,args.expon,args.beta)  
- 
-   with  open(out,'wb') as f:
-   	pickle.dump([args,construct_stats,optimal_stats,demand_stats,node_stats,network_stats],f)
+   out = args.outputfile+"%s_%s_%ditems_%dnodes_%dquerynodes_%ddemands_%ftime_%fchange_%fgamma_%fexpon%fbeta" % (args.graph_type,args.cache_type,args.catalog_size,args.graph_size,args.query_nodes,args.demand_size,args.time,args.demand_change_rate,args.gamma,args.expon,args.beta)
+
+   with open(out,'wb') as f:
+       pickle.dump([args,construct_stats,optimal_stats,demand_stats,node_stats,network_stats],f)
 
 #   for d in cnx.demands:
 #	print d.item, d.rate, d.requests_tally.count()/time, len(d.path), d.hops_tally.mean(), d.weight_tally.mean(), d.time_tally.mean(), d.hit_source_tally.mean()
@@ -1361,6 +1357,6 @@ def main():
 #     plt.xlabel(x_label)
 #     plt.ylabel('CDF')
 #     plt.show()
-   
+
 if __name__=="__main__":
    main()
