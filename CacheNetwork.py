@@ -1135,7 +1135,7 @@ def main():
    parser.add_argument('--demand_distribution',default='powerlaw',type=str, help='Demand distribution', choices=['powerlaw','uniform'])
    parser.add_argument('--powerlaw_exp',default=1.2,type=float, help='Power law exponent, used in demand distribution')
    parser.add_argument('--query_nodes',default=100,type=int, help='Number of nodes generating queries')
-   parser.add_argument('--graph_type',default='erdos_renyi',type=str, help='Graph type', choices=['erdos_renyi','balanced_tree','hypercube','cicular_ladder','cycle','grid_2d','lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
+   parser.add_argument('--graph_type',default='erdos_renyi',type=str, help='Graph type', choices=['erdos_renyi','balanced_tree','hypercube','circular_ladder','cycle','grid_2d','lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
    parser.add_argument('--graph_size',default=100, type=int, help='Network size')
    parser.add_argument('--graph_degree',default=4, type=int, help='Degree. Used by balanced_tree, regular, barabasi_albert, watts_strogatz')
    parser.add_argument('--graph_p',default=0.10, type=int, help='Probability, used in erdos_renyi, watts_strogatz')
@@ -1160,7 +1160,7 @@ def main():
         if args.graph_type == 'balanced_tree':
             ndim = int(np.ceil(np.log(args.graph_size)/np.log(args.graph_degree)))
             return networkx.balanced_tree(args.graph_degree,ndim)
-        if args.graph_type == 'cicular_ladder':
+        if args.graph_type == 'circular_ladder':
             ndim = int(np.ceil(args.graph_size*0.5))
             return networkx.circular_ladder_graph(ndim)
         if args.graph_type == 'cycle':
