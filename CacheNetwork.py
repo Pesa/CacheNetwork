@@ -1,10 +1,10 @@
-#! /usr/bin/env python
+#!/usr/bin/env python
 '''
-	A Cache Network
+    A Cache Network
 '''
 from abc import ABCMeta,abstractmethod
 from Caches import PriorityCache, EWMACache, LMinimalCache 
-from networkx import Graph, DiGraph,shortest_path
+from networkx import Graph, DiGraph, shortest_path
 import networkx
 import random 
 from cvxopt import spmatrix,matrix 
@@ -1117,7 +1117,7 @@ class LMinCache(NetworkedCache):
 def main():
    #logging.basicConfig(filename='execution.log', filemode='w', level=logging.INFO)
 
-   parser = argparse.ArgumentParser(description = 'Simulate a Network of Caches',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+   parser = argparse.ArgumentParser(description='Simulate a Network of Caches.')
    #parser.add_argument('inputfile',help = 'Training data. This should be a tab separated file of the form: index _tab_ features _tab_ output , where index is a number, features is a json string storing the features, and output is a json string storing output (binary) variables. See data/LR-example.txt for an example.')
    parser.add_argument('outputfile', help='Output file')
    parser.add_argument('--max_capacity',default=2,type=int, help='Maximum capacity per cache')
@@ -1135,10 +1135,12 @@ def main():
    parser.add_argument('--demand_distribution',default='powerlaw',type=str, help='Demand distribution', choices=['powerlaw','uniform'])
    parser.add_argument('--powerlaw_exp',default=1.2,type=float, help='Power law exponent, used in demand distribution')
    parser.add_argument('--query_nodes',default=100,type=int, help='Number of nodes generating queries')
-   parser.add_argument('--graph_type',default='erdos_renyi',type=str, help='Graph type', choices=['erdos_renyi','balanced_tree','hypercube','circular_ladder','cycle','grid_2d','lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
-   parser.add_argument('--graph_size',default=100, type=int, help='Network size')
-   parser.add_argument('--graph_degree',default=4, type=int, help='Degree. Used by balanced_tree, regular, barabasi_albert, watts_strogatz')
-   parser.add_argument('--graph_p',default=0.10, type=int, help='Probability, used in erdos_renyi, watts_strogatz')
+   parser.add_argument('--graph_type', default='erdos_renyi', type=str, help='Graph type', choices=['erdos_renyi','balanced_tree','hypercube','circular_ladder','cycle','grid_2d','lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
+   parser.add_argument('--graph_size', default=100, type=int, help='Network size')
+   parser.add_argument('--graph_degree', default=4, type=int, help='Degree; used by balanced_tree, regular, barabasi_albert, watts_strogatz')
+   parser.add_argument('--graph_p', default=0.1, type=float, help='Probability; used in erdos_renyi, watts_strogatz')
+   parser.add_argument('--export_graph_dot', default=None, type=str, help='Export the network graph as dot file instead of running the simulation', metavar='FILENAME')
+   parser.add_argument('--export_graph_edgelist', default=None, type=str, help='Export the network graph as edge list instead of running the simulation', metavar='FILENAME')
    parser.add_argument('--random_seed',default=4156910908,type=int, help='Random seed')
    parser.add_argument('--debug_level',default='INFO',type=str,help='Debug Level', choices=['INFO','DEBUG','WARNING','ERROR'])
    parser.add_argument('--cache_type',default='LRU',type=str,help='Networked Cache type', choices=['LRU','FIFO','LFU','RR','EWMAGRAD','LMIN'])
@@ -1152,7 +1154,6 @@ def main():
    parser.add_argument('--expon',default=0.5,type=float,help='exponent used in LMIN')
    parser.add_argument('--T',default=5.,type=float,help='Suffling period used in LMIN')
    args = parser.parse_args()
-   args.debug_level = eval("logging."+args.debug_level)
 
    def graphGenerator():
         if args.graph_type == 'erdos_renyi':
@@ -1214,9 +1215,10 @@ def main():
         if args.cache_type == 'LMIN':
             return LMinCache(capacity,_id,gamma=args.beta,T = args.T, expon = args.expon,interpolate = args.interpolate)
 
+   args.debug_level = eval("logging."+args.debug_level)
    logging.basicConfig(level=args.debug_level) 
    random.seed(args.random_seed)
-   np.random.seed(args.random_seed+2015)
+   np.random.seed(args.random_seed+2018)
 
    CONFIG.QUERY_MESSAGE_LENGTH=args.query_message_length   
    CONFIG.RESPONSE_MESSAGE_LENGTH=args.response_message_length   
@@ -1225,21 +1227,23 @@ def main():
 
    logging.info('Generating graph and weights...')
    temp_graph = graphGenerator()
-   #networkx.draw(temp_graph)
-   #plt.draw()
    logging.debug('nodes: '+str(temp_graph.nodes()))
    logging.debug('edges: '+str(temp_graph.edges()))
-   G = DiGraph()
-
+   exporting = (args.export_graph_dot is not None) or (args.export_graph_edgelist is not None)
+   if exporting:
+       G = Graph()
+   else:
+       G = DiGraph()
    number_map = dict( zip(temp_graph.nodes(),range(len(temp_graph.nodes())) ))
    G.add_nodes_from(number_map.values()) 
    weights = {}
    for (x,y) in temp_graph.edges():
         xx = number_map[x]
         yy = number_map[y]
-        G.add_edges_from( ((xx,yy),(yy,xx)) ) 
-        weights[(xx,yy)] = random.uniform(args.min_weight,args.max_weight)
-        weights[(yy,xx)] = weights[(xx,yy)]
+        w = random.uniform(args.min_weight,args.max_weight)
+        G.add_weighted_edges_from([(xx,yy,w), (yy,xx,w)])
+        weights[(xx,yy)] = w
+        weights[(yy,xx)] = w
    graph_size = G.number_of_nodes()
    edge_size = G.number_of_edges()
    logging.info('...done. Created graph with %d nodes and %d edges' % (graph_size,edge_size))
@@ -1247,12 +1251,19 @@ def main():
    construct_stats['graph_size'] = graph_size
    construct_stats['edge_size'] = edge_size
 
+   if args.export_graph_dot is not None:
+       networkx.drawing.nx_agraph.write_dot(G, args.export_graph_dot)
+   if args.export_graph_edgelist is not None:
+       networkx.write_weighted_edgelist(G, args.export_graph_edgelist)
+   if exporting:
+       return
+
    logging.info('Generating item sources...')
    item_sources = dict( (item,[G.nodes()[source]]) for item,source in zip(range(args.catalog_size),np.random.choice(range(graph_size),args.catalog_size)) )
    logging.info('...done. Generated %d sources' % len(item_sources))
    logging.debug('Generated sources:')
    for item in item_sources:
-        logging.debug(pp([item,':',item_sources[item]]))	
+        logging.debug(pp([item,':',item_sources[item]]))
 
    construct_stats['sources'] = len(item_sources)
 
