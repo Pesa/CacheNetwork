@@ -1229,12 +1229,14 @@ def main():
    temp_graph = graphGenerator()
    logging.debug('nodes: '+str(temp_graph.nodes()))
    logging.debug('edges: '+str(temp_graph.edges()))
+
    exporting = (args.export_graph_dot is not None) or (args.export_graph_edgelist is not None)
    if exporting:
        G = Graph()
    else:
        G = DiGraph()
-   number_map = dict( zip(temp_graph.nodes(),range(len(temp_graph.nodes())) ))
+
+   number_map = dict( zip(temp_graph.nodes(), range(len(temp_graph.nodes()))) )
    G.add_nodes_from(number_map.values()) 
    weights = {}
    for (x,y) in temp_graph.edges():
@@ -1269,51 +1271,50 @@ def main():
 
    logging.info('Generating query node list...')
    query_node_list = [ G.nodes()[i] for i in random.sample(xrange(graph_size),args.query_nodes) ]
-   logging.info('...done. Generated %d query nodes.' % len(query_node_list) )
+   logging.info('...done. Generated %d query nodes.' % len(query_node_list))
 
    construct_stats['query_nodes'] = len(query_node_list)
 
    logging.info('Generating demands...')
    if args.demand_distribution == 'powerlaw':
-        factor = lambda i : (1.0+i)**(-args.powerlaw_exp) 
+       factor = lambda i: (1.0+i)**(-args.powerlaw_exp)
    else:
-        factor = lambda i : 1.0
-   pmf =  np.array( [ factor(i) for i in range(args.catalog_size) ] ) 
+       factor = lambda i: 1.0
+   pmf = np.array([ factor(i) for i in range(args.catalog_size) ])
    pmf /= sum(pmf)
    distr = rv_discrete(values=(range(args.catalog_size),pmf))
-   if args.catalog_size < args.demand_size: 
-        items_requested = list(distr.rvs(size = (args.demand_size-args.catalog_size))) +range(args.catalog_size)
+   if args.catalog_size < args.demand_size:
+       items_requested = list(distr.rvs(size=(args.demand_size - args.catalog_size))) + range(args.catalog_size)
    else:
-        items_requested =  list(distr.rvs(size = args.demand_size))
+       items_requested = list(distr.rvs(size=args.demand_size))
    random.shuffle(items_requested)
 
    demands_per_query_node = args.demand_size // args.query_nodes
    remainder = args.demand_size % args.query_nodes
    demands = []
    for x in query_node_list:
-      dem = demands_per_query_node
-      if x < remainder:
-	dem = dem+1
-	
-      new_dems = [ Demand(items_requested[pos], shortest_path(G,x,item_sources[   items_requested[pos] ][0],weight='weight'),  random.uniform(args.min_rate,args.max_rate))   for pos in range(len(demands),len(demands)+dem)]
-      logging.debug(pp(new_dems))
-      demands = demands + new_dems
- 
-   logging.info('...done. Generated %d demands'%len(demands))
+       dem = demands_per_query_node
+       if x < remainder:
+           dem = dem+1
+       new_dems = [ Demand(items_requested[pos], shortest_path(G,x,item_sources[items_requested[pos]][0],weight='weight'), random.uniform(args.min_rate,args.max_rate)) for pos in range(len(demands),len(demands)+dem) ]
+       logging.debug(pp(new_dems))
+       demands = demands + new_dems
+
+   logging.info('...done. Generated %d demands' % len(demands))
    #plt.hist([ d.item for d in demands], bins=np.arange(args.catalog_size)+0.5)
    #plt.show()
 
    construct_stats['demands'] = len(demands)
 
    logging.info('Generating capacities...')
-   capacities = dict( (x,random.randint(args.min_capacity,args.max_capacity)) for  x in G.nodes() )
+   capacities = dict( (x,random.randint(args.min_capacity,args.max_capacity)) for x in G.nodes() )
    logging.info('...done. Generated %d caches' % len(capacities))
    logging.debug('Generated capacities:')
    for key in capacities:
         logging.debug(pp([key,':',capacities[key]]))
 
    logging.info('Building CacheNetwork')
-   cnx= CacheNetwork(G,cacheGenerator,demands,item_sources,capacities,weights,weights,args.warmup,args.monitoring_rate,args.demand_change_rate,args.min_rate, args.max_rate)
+   cnx = CacheNetwork(G, cacheGenerator, demands, item_sources, capacities, weights, weights, args.warmup, args.monitoring_rate, args.demand_change_rate, args.min_rate, args.max_rate)
    logging.info('...done')
 
    Y,res= cnx.minimizeRelaxation()
