@@ -2,21 +2,18 @@
 '''
     A Cache Network
 '''
-from abc import ABCMeta,abstractmethod
+from abc import ABCMeta, abstractmethod
 from Caches import PriorityCache, EWMACache, LMinimalCache 
-from networkx import Graph, DiGraph, shortest_path
 import networkx
-import random 
+from networkx import Graph, DiGraph, shortest_path
 from cvxopt import spmatrix,matrix 
 from cvxopt.solvers import lp
 from simpy import *
 from scipy.stats import rv_discrete
 import numpy as np
 from numpy.linalg import matrix_rank
-import logging,argparse
-import itertools
-from statsmodels.distributions.empirical_distribution import ECDF
-import pickle
+#from statsmodels.distributions.empirical_distribution import ECDF
+import argparse, csv, itertools, logging, pickle, random
 import topologies
 
 class CONFIG(object):
@@ -153,7 +150,7 @@ class CacheNetwork(DiGraph):
    
    """
 
-   def __init__(self,G,cacheGenerator,demands,item_sources,capacities,weights,delays,warmup = 0,monitoring_rate=1.0,demand_change_rate=0,demand_min=1.0,demand_max=1.0):
+   def __init__(self, G, cacheGenerator, demands, item_sources, capacities, weights, delays, warmup=0, monitoring_rate=1.0, demand_change_rate=0.0, demand_min=1.0, demand_max=1.0):
 	self.env = Environment()   
 	self.warmup =warmup
 	self.demandstats = {}
@@ -1130,11 +1127,13 @@ def main():
    parser.add_argument('--warmup',default=0.0,type=float, help='Warmup time until measurements start')
    parser.add_argument('--catalog_size',default=100,type=int, help='Catalog size')
 #   parser.add_argument('--sources_per_item',default=1,type=int, help='Number of designated sources per catalog item')
+   parser.add_argument('--demand_file',default=None,type=str, help='Read demands from this file instead of generating them', metavar='FILENAME')
    parser.add_argument('--demand_size',default=1000,type=int, help='Demand size')
    parser.add_argument('--demand_change_rate',default=0.0,type=float, help='Demand change rate')
    parser.add_argument('--demand_distribution',default='powerlaw',type=str, help='Demand distribution', choices=['powerlaw','uniform'])
    parser.add_argument('--powerlaw_exp',default=1.2,type=float, help='Power law exponent, used in demand distribution')
    parser.add_argument('--query_nodes',default=100,type=int, help='Number of nodes generating queries')
+   parser.add_argument('--graph_file',default=None,type=str, help='Read network graph from this file instead of generating it', metavar='FILENAME')
    parser.add_argument('--graph_type', default='erdos_renyi', type=str, help='Graph type', choices=['erdos_renyi','balanced_tree','hypercube','circular_ladder','cycle','grid_2d','lollipop','expander','hypercube','star', 'barabasi_albert','watts_strogatz','regular','powerlaw_tree','small_world','geant','abilene','dtelekom','servicenetwork'])
    parser.add_argument('--graph_size', default=100, type=int, help='Network size')
    parser.add_argument('--graph_degree', default=4, type=int, help='Degree; used by balanced_tree, regular, barabasi_albert, watts_strogatz')
@@ -1225,27 +1224,37 @@ def main():
 
    construct_stats = {}
 
-   logging.info('Generating graph and weights...')
-   temp_graph = graphGenerator()
-   logging.debug('nodes: '+str(temp_graph.nodes()))
-   logging.debug('edges: '+str(temp_graph.edges()))
-
    exporting = (args.export_graph_dot is not None) or (args.export_graph_edgelist is not None)
-   if exporting:
-       G = Graph()
-   else:
-       G = DiGraph()
-
-   number_map = dict( zip(temp_graph.nodes(), range(len(temp_graph.nodes()))) )
-   G.add_nodes_from(number_map.values()) 
+   G = Graph() if exporting else DiGraph()
    weights = {}
-   for (x,y) in temp_graph.edges():
-        xx = number_map[x]
-        yy = number_map[y]
-        w = random.uniform(args.min_weight,args.max_weight)
-        G.add_weighted_edges_from([(xx,yy,w), (yy,xx,w)])
-        weights[(xx,yy)] = w
-        weights[(yy,xx)] = w
+
+   if args.graph_file is not None:
+        logging.info('Reading graph from file "%s"...' % args.graph_file)
+        with open(args.graph_file) as gf:
+            gf_reader = csv.reader(gf, delimiter=' ', skipinitialspace=True, strict=True)
+            for row in gf_reader:
+                xx = int(row[0])
+                yy = int(row[1])
+                # weights in graph_file already consider request + reply, so divide by 2
+                w = float(row[2]) * 0.5
+                G.add_weighted_edges_from([(xx,yy,w), (yy,xx,w)])
+                weights[(xx,yy)] = w
+                weights[(yy,xx)] = w
+   else:
+        logging.info('Generating graph and weights...')
+        temp_graph = graphGenerator()
+        logging.debug('nodes: '+str(temp_graph.nodes()))
+        logging.debug('edges: '+str(temp_graph.edges()))
+        number_map = dict( zip(temp_graph.nodes(), range(len(temp_graph.nodes()))) )
+        G.add_nodes_from(number_map.values())
+        for (x,y) in temp_graph.edges():
+                xx = number_map[x]
+                yy = number_map[y]
+                w = random.uniform(args.min_weight,args.max_weight)
+                G.add_weighted_edges_from([(xx,yy,w), (yy,xx,w)])
+                weights[(xx,yy)] = w
+                weights[(yy,xx)] = w
+
    graph_size = G.number_of_nodes()
    edge_size = G.number_of_edges()
    logging.info('...done. Created graph with %d nodes and %d edges' % (graph_size,edge_size))
@@ -1260,50 +1269,68 @@ def main():
    if exporting:
        return
 
-   logging.info('Generating item sources...')
-   item_sources = dict( (item,[G.nodes()[source]]) for item,source in zip(range(args.catalog_size),np.random.choice(range(graph_size),args.catalog_size)) )
-   logging.info('...done. Generated %d sources' % len(item_sources))
-   logging.debug('Generated sources:')
-   for item in item_sources:
-        logging.debug(pp([item,':',item_sources[item]]))
-
-   construct_stats['sources'] = len(item_sources)
-
-   logging.info('Generating query node list...')
-   query_node_list = [ G.nodes()[i] for i in random.sample(xrange(graph_size),args.query_nodes) ]
-   logging.info('...done. Generated %d query nodes.' % len(query_node_list))
-
-   construct_stats['query_nodes'] = len(query_node_list)
-
-   logging.info('Generating demands...')
-   if args.demand_distribution == 'powerlaw':
-       factor = lambda i: (1.0+i)**(-args.powerlaw_exp)
-   else:
-       factor = lambda i: 1.0
-   pmf = np.array([ factor(i) for i in range(args.catalog_size) ])
-   pmf /= sum(pmf)
-   distr = rv_discrete(values=(range(args.catalog_size),pmf))
-   if args.catalog_size < args.demand_size:
-       items_requested = list(distr.rvs(size=(args.demand_size - args.catalog_size))) + range(args.catalog_size)
-   else:
-       items_requested = list(distr.rvs(size=args.demand_size))
-   random.shuffle(items_requested)
-
-   demands_per_query_node = args.demand_size // args.query_nodes
-   remainder = args.demand_size % args.query_nodes
+   item_sources = {}
+   query_node_list = []
    demands = []
-   for x in query_node_list:
-       dem = demands_per_query_node
-       if x < remainder:
-           dem = dem+1
-       new_dems = [ Demand(items_requested[pos], shortest_path(G,x,item_sources[items_requested[pos]][0],weight='weight'), random.uniform(args.min_rate,args.max_rate)) for pos in range(len(demands),len(demands)+dem) ]
-       logging.debug(pp(new_dems))
-       demands = demands + new_dems
+   if args.demand_file is not None:
+        logging.info('Reading demands from file "%s"...' % args.demand_file)
+        query_nodes = set()
+        with open(args.demand_file) as df:
+            df_reader = csv.reader(df, delimiter=' ', skipinitialspace=True, strict=True)
+            item_sources = {}
+            for row in df_reader:
+                item = int(row[0])
+                rate = float(row[1])
+                path = [ int(i) for i in row[2:] ]
+                if item not in item_sources:
+                    item_sources[item] = set()
+                item_sources[item].add(G.nodes()[path[-1]])
+                query_nodes.add(G.nodes()[path[0]])
+                demands.append(Demand(item, path, rate))
+        for item in item_sources:
+            item_sources[item] = list(item_sources[item])
+        query_node_list = list(query_nodes)
+        logging.info('...done. Found %d sources, %d query nodes, %d demands' % (len(item_sources),len(query_node_list),len(demands)))
+   else:
+        logging.info('Generating item sources...')
+        item_sources = dict( (item,[G.nodes()[source]]) for item,source in zip(range(args.catalog_size),np.random.choice(range(graph_size),args.catalog_size)) )
+        logging.info('...done. Generated %d sources' % len(item_sources))
+        logging.debug('Generated sources:')
+        for item in item_sources:
+                logging.debug(pp([item,':',item_sources[item]]))
 
-   logging.info('...done. Generated %d demands' % len(demands))
+        logging.info('Generating query node list...')
+        query_node_list = [ G.nodes()[i] for i in random.sample(xrange(graph_size),args.query_nodes) ]
+        logging.info('...done. Generated %d query nodes.' % len(query_node_list))
+
+        logging.info('Generating demands...')
+        if args.demand_distribution == 'powerlaw':
+            factor = lambda i: (1.0+i)**(-args.powerlaw_exp)
+        else:
+            factor = lambda i: 1.0
+        pmf = np.array([ factor(i) for i in range(args.catalog_size) ])
+        pmf /= sum(pmf)
+        distr = rv_discrete(values=(range(args.catalog_size),pmf))
+        if args.catalog_size < args.demand_size:
+            items_requested = list(distr.rvs(size=(args.demand_size - args.catalog_size))) + range(args.catalog_size)
+        else:
+            items_requested = list(distr.rvs(size=args.demand_size))
+        random.shuffle(items_requested)
+        demands_per_query_node = args.demand_size // args.query_nodes
+        remainder = args.demand_size % args.query_nodes
+        for x in query_node_list:
+            dem = demands_per_query_node
+            if x < remainder:
+                dem = dem+1
+            new_dems = [ Demand(items_requested[pos], shortest_path(G,x,item_sources[items_requested[pos]][0],weight='weight'), random.uniform(args.min_rate,args.max_rate)) for pos in range(len(demands),len(demands)+dem) ]
+            logging.debug(pp(new_dems))
+            demands += new_dems
+        logging.info('...done. Generated %d demands' % len(demands))
+
    #plt.hist([ d.item for d in demands], bins=np.arange(args.catalog_size)+0.5)
    #plt.show()
-
+   construct_stats['sources'] = len(item_sources)
+   construct_stats['query_nodes'] = len(query_node_list)
    construct_stats['demands'] = len(demands)
 
    logging.info('Generating capacities...')
