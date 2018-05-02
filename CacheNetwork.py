@@ -1327,7 +1327,7 @@ def main():
             demands += new_dems
         logging.info('...done. Generated %d demands' % len(demands))
 
-   #plt.hist([ d.item for d in demands], bins=np.arange(args.catalog_size)+0.5)
+   #plt.hist([ d.item for d in demands], bins=np.arange(len(item_sources))+0.5)
    #plt.show()
    construct_stats['sources'] = len(item_sources)
    construct_stats['query_nodes'] = len(query_node_list)
@@ -1377,7 +1377,7 @@ def main():
    network_stats['fun'] = cnx.funstats
    network_stats['opt'] = cnx.optstats
 
-   out = args.outputfile+"%s_%s_%ditems_%dnodes_%dquerynodes_%ddemands_%ftime_%fchange_%fgamma_%fexpon%fbeta" % (args.graph_type,args.cache_type,args.catalog_size,args.graph_size,args.query_nodes,args.demand_size,args.time,args.demand_change_rate,args.gamma,args.expon,args.beta)
+   out = args.outputfile + '%s_%s_%ditems_%dnodes_%dquerynodes_%ddemands_%ftime_%fchange_%fgamma_%fexpon_%fbeta' % (args.graph_type, args.cache_type, len(item_sources), graph_size, len(query_node_list), len(demands), args.time, args.demand_change_rate, args.gamma, args.expon, args.beta)
 
    with open(out,'wb') as f:
        pickle.dump([args,construct_stats,optimal_stats,demand_stats,node_stats,network_stats],f)
